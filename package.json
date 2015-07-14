@@ -1,0 +1,38 @@
+{
+  "name": "react-base-control",
+  "version": "0.1.0",
+  "description": "Higher order component to manage control-related events and state.",
+  "main": "lib/baseControl.js",
+  "scripts": {
+    "compile": "babel --stage 0 -d lib/ src/",
+    "prepublish": "npm run compile"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jamesknelson/react-base-control.git"
+  },
+  "keywords": [
+    "react",
+    "component",
+    "decorator",
+    "decorators",
+    "control",
+    "base",
+    "class",
+    "callbacks",
+    "classes",
+    "props"
+  ],
+  "author": "James K Nelson <james@jamesknelson.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jamesknelson/react-base-control/issues"
+  },
+  "peerDependencies": {
+    "react": "^0.14.0-beta1"
+  },
+  "homepage": "https://github.com/jamesknelson/react-base-control#readme",
+  "dependencies": {
+    "invariant": "^2.1.0"
+  }
+}
