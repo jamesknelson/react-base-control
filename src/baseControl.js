@@ -129,7 +129,7 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
     }
 
     component.prototype[finish] = function() {
-      if (this.acting == true && this.controlPrimaryAction) {
+      if (this.control.acting == true && this.controlPrimaryAction) {
         this.controlPrimaryAction()
       }
 
