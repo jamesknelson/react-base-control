@@ -111,14 +111,19 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
     component.contextTypes.controlState = controlStateShape
     component.contextTypes.setControlState = PropTypes.func
 
-    component.prototype[start] = function(selecting) {
+    component.prototype[start] = function(e) {
       if (!this.control.disabled) {
+        const point = e && {
+          x: e.pageX === undefined ? e.nativeEvent.pageX : e.pageX,
+          y: e.pageY === undefined ? e.nativeEvent.pageY : e.pageY,
+        }
+
         // Use null instead of false for the beacon, so we can tell if it is
         // disabled by blur/pointer/escape key before keyup
         this.context.setControlState({
           acting: !!this.controlPrimaryAction,
-          beacon: !selecting && this.control.beacon ? null : false,
-          selecting: selecting,
+          beacon: !point && (this.control.beacon || this.control.beacon === null) ? null : false,
+          selecting: point,
         })
       }
     }
@@ -135,7 +140,7 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
       })
     }
 
-    component.on('keydown', function(e) {
+    component.on('keyDown', function(e) {
       switch (e.keyCode) {
         case KeyCodes.ENTER:
           // TODO: if we're a child of a form, submit it and break -
@@ -143,7 +148,7 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
           break
 
         case KeyCodes.SPACE:
-          this[startActing](false)
+          this[start]()
           break
 
         case KeyCodes.ESC:
@@ -156,7 +161,7 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
       }
     })
 
-    component.on('keyup', function(e) {
+    component.on('keyUp', function(e) {
       switch (e.keyCode) {
         case KeyCodes.ENTER:
           // TODO: if we're a child of a form, submit it and break -
