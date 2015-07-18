@@ -58,8 +58,10 @@ import invariant from "invariant"
 
 
 const beaconWasEnabled = Symbol()
-const finish = Symbol()
+
+const setControl = Symbol()
 const start = Symbol()
+const finish = Symbol()
 const oldBase = Symbol()
 
 
@@ -82,10 +84,9 @@ const KeyCodes = {
 }
 
 
-
+// We only need to know if *tab* is pressed, not *where* it was pressed - so
+// set up a variable which all controls can reference.
 let tabPressed = false
-
-
 if (window.addEventListener) {
   window.addEventListener('keydown', e => {
     if (e.keyCode == KeyCodes.TAB) {
@@ -101,15 +102,64 @@ if (window.addEventListener) {
 baseControl.on = base.on
 export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
   return function decorator(component) {
-    if (component.prototype.control !== undefined) {
-      throw new Error("@control applied to a component which already has a `control` property")
-    }
+
+
+    //
+    // Sanity checking, modify component configuration
+    //
+
+    invariant(component.prototype.control === undefined,
+      "@baseControl must be applied to a component with no `control` property")
+
+    if (!component.propTypes) component.propTypes = {}
+    if (!component.contextTypes) component.contextTypes = {}
+
+    invariant(component.propTypes.onControl === undefined,
+      "@baseControl must be applied to a component with no `onControl` propType")
+
+    invariant(component.contextTypes.controlState === undefined,
+      "@baseControl must be applied to a component with no `controlState` contextType")
+    invariant(component.contextTypes.setControlState === undefined,
+      "@baseControl must be applied to a component with no `setControlState` contextType")
+
+    component.propTypes.onControl = PropTypes.func
+
+    // TODO: These should only ever be used internally, so it would make sense,
+    // to define them as symbols instead of strings. However, React doesn't
+    // currently seem to support this.
+    component.contextTypes.controlState = controlStateShape
+    component.contextTypes.setControlState = PropTypes.func
+
+
+    //
+    // Apply `base`, modifying it's settings to suit us
+    //
 
     base(prefix, {passthrough})(component)
 
-    component.contextTypes = component.contextTypes || {}
-    component.contextTypes.controlState = controlStateShape
-    component.contextTypes.setControlState = PropTypes.func
+    component.prototype[oldBase] = component.prototype.base
+    component.prototype.base = function({classes, callbacks, passthrough = {}} = {}) {
+      if (!passthrough.force) passthrough.force = []
+      passthrough.force.push('disabled', 'tabindex', 'form')
+
+      if (!passthrough.skip) passthrough.skip = []
+      passthrough.skip.push('onControl')
+
+      return this[oldBase]({classes, callbacks, passthrough})
+    }
+
+
+    //
+    // Setup our internal methods
+    //
+
+    component.prototype[setControl] = function(control) {
+      this.context.setControlState(control)
+
+      if (this.props.onControl) {
+        this.props.onControl(this.context.controlState)
+      }
+    }
 
     component.prototype[start] = function(e) {
       if (!this.control.disabled) {
@@ -120,7 +170,7 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
 
         // Use null instead of false for the beacon, so we can tell if it is
         // disabled by blur/pointer/escape key before keyup
-        this.context.setControlState({
+        this[setControl]({
           acting: !!this.controlPrimaryAction,
           beacon: !point && (this.control.beacon || this.control.beacon === null) ? null : false,
           selecting: point,
@@ -133,12 +183,17 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
         this.controlPrimaryAction()
       }
 
-      this.context.setControlState({
+      this[setControl]({
         acting: false,
         beacon: this.control.beacon || this.control.beacon === null,
         selecting: false,
       })
     }
+
+
+    //
+    // Define event handlers (using react-callback-register)
+    //
 
     component.on('keyDown', function(e) {
       switch (e.keyCode) {
@@ -152,7 +207,7 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
           break
 
         case KeyCodes.ESC:
-          this.context.setControlState({
+          this[setControl]({
             beacon: false,
             selecting: false,
             acting: false,
@@ -175,11 +230,11 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
     })
 
     component.on('mouseEnter', function(e) {
-      this.context.setControlState({hover: true})
+      this[setControl]({hover: true})
     })
 
     component.on('mouseLeave', function(e) {
-      this.context.setControlState({hover: false})
+      this[setControl]({hover: false})
     })
 
     component.on(['mouseDown', 'touchStart'], function(e) {
@@ -193,15 +248,20 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
     })
 
     component.on('blur', function(e) {
-      this.context.setControlState({beacon: false, active: false})
+      this[setControl]({beacon: false, active: false})
     })
 
     component.on('focus', function(e) {
       if (tabPressed) {
-        this.context.setControlState({beacon: true})
+        this[setControl]({beacon: true})
       }
-      this.context.setControlState({active: true})
+      this[setControl]({active: true})
     })
+
+
+    //
+    // Define API for applied component
+    //
 
     Object.defineProperty(component.prototype, 'control', {
       get: function() {
@@ -210,18 +270,12 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
       enumerable: true,
     })
 
-    component.prototype[oldBase] = component.prototype.base
-    component.prototype.base = function({classes, callbacks, passthrough = {}} = {}) {
-      passthrough.force = passthrough.force || []
-      passthrough.force.push('disabled', 'tabindex', 'form')
 
-      return this[oldBase]({classes, callbacks, passthrough})
-    }
+    //
+    // Create wrapper component to hide our component state via context
+    //
 
-    // Hide our state in a wrapper component so as to not intefere with anything
-    // in the original component. Pass it through as context on a symbol only
-    // known to us.
-    return class extends Component {
+    return class Control extends Component {
       static propTypes = {
         disabled: PropTypes.bool,
       }
