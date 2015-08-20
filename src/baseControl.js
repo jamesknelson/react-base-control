@@ -100,9 +100,8 @@ if (window.addEventListener) {
 
 
 baseControl.on = base.on
-export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
+export default function baseControl(prefix, {passthrough = {}, manualReturn} = {}) {
   return function decorator(component) {
-
 
     //
     // Sanity checking, modify component configuration
@@ -135,29 +134,24 @@ export default function baseControl(prefix, {passthrough, manualReturn} = {}) {
     // Apply `base`, modifying it's settings to suit us
     //
 
+    if (!passthrough.force) passthrough.force = []
+    passthrough.force.push('disabled', 'tabindex', 'form')
+
+    if (!passthrough.skip) passthrough.skip = []
+    passthrough.skip.push('onControl')
+
     base(prefix, {passthrough})(component)
-
-    component.prototype[oldBase] = component.prototype.base
-    component.prototype.base = function({classes, callbacks, passthrough = {}} = {}) {
-      if (!passthrough.force) passthrough.force = []
-      passthrough.force.push('disabled', 'tabindex', 'form')
-
-      if (!passthrough.skip) passthrough.skip = []
-      passthrough.skip.push('onControl')
-
-      return this[oldBase]({classes, callbacks, passthrough})
-    }
-
 
     //
     // Setup our internal methods
     //
 
     component.prototype[setControl] = function(control) {
-      this.context.setControlState(control)
+      const newControlState = Object.assign({}, this.context.controlState, control)
+      this.context.setControlState(newControlState)
 
       if (this.props.onControl) {
-        this.props.onControl(this.context.controlState)
+        this.props.onControl(newControlState)
       }
     }
 
