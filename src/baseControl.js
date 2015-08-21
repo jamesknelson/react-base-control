@@ -83,6 +83,13 @@ const KeyCodes = {
   TAB: 9,
 }
 
+const InputCallbacks = [
+  'blur',
+  'focus',
+  'keyDown',
+  'keyUp',
+]
+
 
 // We only need to know if *tab* is pressed, not *where* it was pressed - so
 // set up a variable which all controls can reference.
@@ -146,12 +153,32 @@ export default function baseControl(prefix, {passthrough = {}, manualReturn} = {
     // Setup our internal methods
     //
 
+    component.prototype.targetCallbacks = function() {
+      const callbacks = Object.assign({}, this.callbacks)
+      for (let event of InputCallbacks) {
+        delete callbacks[event]
+      }
+      return callbacks
+    }
+
+    component.prototype.focusableCallbacks = function() {
+      const callbacks = {}
+      for (let event of InputCallbacks) {
+        callbacks[event] = this.callbacks[event]
+      }
+      return callbacks
+    }
+
     component.prototype[setControl] = function(control) {
-      const newControlState = Object.assign({}, this.context.controlState, control)
-      this.context.setControlState(newControlState)
+      if (this.controlWillUpdate) {
+        this.controlWillUpdate(control)
+      }
+      
+
+      this.context.setControlState(control)
 
       if (this.props.onControl) {
-        this.props.onControl(newControlState)
+        this.props.onControl(this.context.controlState)
       }
     }
 
@@ -172,9 +199,9 @@ export default function baseControl(prefix, {passthrough = {}, manualReturn} = {
       }
     }
 
-    component.prototype[finish] = function() {
+    component.prototype[finish] = function(e) {
       if (this.control.acting == true && this.controlPrimaryAction) {
-        this.controlPrimaryAction()
+        this.controlPrimaryAction(e)
       }
 
       this[setControl]({
@@ -194,8 +221,6 @@ export default function baseControl(prefix, {passthrough = {}, manualReturn} = {
         case KeyCodes.ENTER:
           // TODO: if we're a child of a form, submit it and break -
           // otherwise fall through
-          break
-
         case KeyCodes.SPACE:
           this[start]()
           break
@@ -215,10 +240,8 @@ export default function baseControl(prefix, {passthrough = {}, manualReturn} = {
         case KeyCodes.ENTER:
           // TODO: if we're a child of a form, submit it and break -
           // otherwise fall through
-          break
-
         case KeyCodes.SPACE:
-          this[finish]()
+          this[finish](e)
           break
       }
     })
@@ -229,6 +252,7 @@ export default function baseControl(prefix, {passthrough = {}, manualReturn} = {
 
     component.on('mouseLeave', function(e) {
       this[setControl]({hover: false})
+      this[finish](e)
     })
 
     component.on(['mouseDown', 'touchStart'], function(e) {
@@ -238,7 +262,7 @@ export default function baseControl(prefix, {passthrough = {}, manualReturn} = {
     })
 
     component.on(['mouseUp', 'mouseOut', 'touchEnd'], function(e) {
-      this[finish]()
+      this[finish](e)
     })
 
     component.on('blur', function(e) {
